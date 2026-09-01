@@ -25,7 +25,11 @@ def run(bom_path: str, out_path: str):
     print(f"Looking up {len(mpns)} parts on Nexar...")
     result = client.lookup_mpns(mpns)
 
-    parts_by_mpn = {p["mpn"].upper(): p for p in result.get("parts", [])}
+    parts_by_mpn = {}
+    for item in result:
+        if isinstance(item, dict):
+            for p in item.get("parts", []):
+                parts_by_mpn[p["mpn"].upper()] = p
 
     rows = []
     for _, line in bom.iterrows():
