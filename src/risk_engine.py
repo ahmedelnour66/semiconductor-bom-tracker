@@ -21,7 +21,7 @@ def _get_spec(part: dict, attribute_name: str) -> Optional[str]:
     return None
 
 
-def assess_part(part: Optional[dict], requested_qty: int) -> dict:
+def assess_part(part: Optional[dict], requested_qty: int, check_single_source: bool = True) -> dict:
     if part is None:
         return {
             "risk": "UNKNOWN",
@@ -49,7 +49,7 @@ def assess_part(part: Optional[dict], requested_qty: int) -> dict:
         flags.append(f"Lifecycle status: {lifecycle}")
     if total_stock < max(LOW_STOCK_THRESHOLD, requested_qty):
         flags.append(f"Low stock across distributors: {total_stock} units")
-    if len(sellers) <= 1:
+    if check_single_source and len(sellers) <= 1:
         flags.append(f"Single or no distributor source ({len(sellers)} found)")
     if max_lead_time and max_lead_time > LONG_LEAD_TIME_DAYS:
         flags.append(f"Long lead time: {max_lead_time} days")
