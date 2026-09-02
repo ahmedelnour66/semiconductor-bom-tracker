@@ -1,4 +1,5 @@
 manufacturer,mpn,qty,designator
-Texas Instruments,SN74S74N,100,U1
-STMicroelectronics,STM32F103C8T6,250,U2
-Analog Devices,ADM1176ARMZ,50,U3
+NXP Semiconductors,FS32K144HAT0MLHT,200,U1
+Infineon Technologies,TLE9278BQXV33XUMA1,200,U2
+Allegro MicroSystems,A1324LUA-T,500,U3
+STMicroelectronics,VND5E025AKTR-E,150,U4
