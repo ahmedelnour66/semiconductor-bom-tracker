@@ -8,15 +8,17 @@ Sign-up: My Mouser Account -> API page -> request Search API access.
 Approval typically takes 1-2 business days.
 
 IMPORTANT — read before trusting this file:
-I could not verify the exact response field names against Mouser's official
-Search API Developer Guide (I only found a Cart/Order API guide, plus
-several independent third-party clients that agree with each other on
-field names like ManufacturerPartNumber, LifecycleStatus, Availability,
-LeadTime). They're consistent enough to be a solid starting point, but NOT
-confirmed against Mouser's own docs. Once your key is approved:
-  1. Run this file directly: `python -m src.mouser_client`
-  2. Compare the printed raw JSON against what `_normalize()` below assumes
-  3. Fix any mismatches before running main.py for real
+Verified against a real response on 2026-09-01: ManufacturerPartNumber,
+Availability, and LeadTime all match the format assumed below (LeadTime
+comes back as "N Days", e.g. "280 Days" — the parser already handles this
+correctly since it only multiplies by 7 when it sees "week").
+
+One real caveat, not a bug: LifecycleStatus came back `null` for a known
+in-production part (STM32F103C8T6). This suggests Mouser doesn't reliably
+populate lifecycle/obsolescence status the way Nexar's dedicated spec
+attribute does. Treat the "obsolescence" risk flag as weaker signal when
+running on Mouser-only data — it may simply not fire even for genuinely
+risky parts, since the underlying field is often empty.
 
 IMPORTANT — a real limitation, not just a technical detail:
 Mouser is ONE distributor. The "single or no distributor source" risk flag
@@ -67,6 +69,8 @@ class MouserClient:
             )
             resp.raise_for_status()
             data = resp.json()
+            if data.get("Errors"):
+                raise RuntimeError(f"Mouser API error: {data['Errors']}")
             results = data.get("SearchResults") or {}
             for raw_part in results.get("Parts", []) or []:
                 all_parts.append(_normalize(raw_part))
@@ -79,26 +83,53 @@ def _chunk(items: list, size: int):
 
 
 def _normalize(raw: dict) -> dict:
-    """Convert Mouser's raw part JSON into the shape risk_engine.py expects.
-    VERIFY field names against a real response (see module docstring) before
-    trusting this in production."""
+    """Convert Mouser's raw part JSON into the shape risk_engine.py expects,
+    plus extra descriptive fields (description, datasheet_url, price breaks)
+    for use in the report."""
     mpn = raw.get("ManufacturerPartNumber", "")
     lifecycle = raw.get("LifecycleStatus", "") or ""
     lead_days = _parse_lead_days(raw.get("LeadTime", "") or "")
     stock = _parse_stock(raw.get("Availability", "") or "")
+    prices = _parse_price_breaks(raw.get("PriceBreaks", []) or [])
 
     return {
         "mpn": mpn,
+        "description": raw.get("Description", "") or "",
+        "datasheet_url": raw.get("DataSheetUrl", "") or "",
         "specs": [
             {"attribute": {"name": "lifecyclestatus"}, "value": lifecycle, "displayValue": lifecycle}
         ],
         "sellers": [
             {
                 "company": {"name": "Mouser"},
-                "offers": [{"inventoryLevel": stock, "factoryLeadDays": lead_days}],
+                "offers": [{"inventoryLevel": stock, "factoryLeadDays": lead_days, "prices": prices}],
             }
         ],
     }
+
+
+def _parse_price_breaks(raw_breaks: list) -> list[dict]:
+    """Mouser's PriceBreaks: [{"Quantity": 10, "Price": "$5.57", "Currency": "USD"}, ...]"""
+    out = []
+    for pb in raw_breaks:
+        price = _parse_price(pb.get("Price", "") or "")
+        if price is None:
+            continue
+        out.append({
+            "quantity": pb.get("Quantity", 0),
+            "price": price,
+            "currency": pb.get("Currency", "USD"),
+        })
+    return out
+
+
+def _parse_price(price_str: str) -> Optional[float]:
+    """Mouser returns price as a string like '$5.57'."""
+    cleaned = price_str.replace("$", "").replace(",", "").strip()
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
 
 
 def _parse_stock(availability_str: str) -> int:

@@ -5,7 +5,8 @@ import pandas as pd
 
 def write_report(rows: list[dict], out_path: str):
     df = pd.DataFrame(rows)
-    col_order = ["mpn", "manufacturer", "qty", "risk", "reason"]
+    col_order = ["mpn", "manufacturer", "qty", "risk", "reason",
+                 "unit_price", "extended_price", "description", "datasheet_url"]
     df = df[[c for c in col_order if c in df.columns]]
 
     if out_path.endswith(".xlsx"):

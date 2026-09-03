@@ -13,6 +13,7 @@ import argparse
 
 from src.bom_parser import load_bom
 from src.risk_engine import assess_part
+from src.pricing import price_at_qty
 from src.report import write_report
 
 
@@ -43,16 +44,18 @@ def run(bom_path: str, out_path: str, source: str):
     rows = []
     for _, line in bom.iterrows():
         part = parts_by_mpn.get(line["mpn"])
-        assessment = assess_part(
-            part,
-            requested_qty=int(line.get("qty", 0) or 0),
-            check_single_source=check_single_source,
-        )
+        qty = int(line.get("qty", 0) or 0)
+        assessment = assess_part(part, requested_qty=qty, check_single_source=check_single_source)
+        unit_price = price_at_qty(part, qty) if part else None
         rows.append({
             "mpn": line["mpn"],
             "manufacturer": line["manufacturer"],
             "qty": line.get("qty"),
             **assessment,
+            "unit_price": unit_price,
+            "extended_price": round(unit_price * qty, 2) if unit_price is not None else None,
+            "description": part.get("description", "") if part else "",
+            "datasheet_url": part.get("datasheet_url", "") if part else "",
         })
 
     write_report(rows, out_path)
